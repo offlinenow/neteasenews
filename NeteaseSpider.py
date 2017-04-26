@@ -5,11 +5,10 @@ import calendar
 import datetime
 import gc
 import json
+import multiprocessing
 import random
 
-import multiprocessing
 import regex as re
-
 import requests
 from bs4 import BeautifulSoup
 from pymongo import *
@@ -114,17 +113,18 @@ def sendToMongodb(insertData):
 def getnews(URL):
     date = str()
     html = networkExceptionCatch(URL)
-    soup = BeautifulSoup(html, 'html.parser')
+    html = re.sub(r'<script.*?</script>', '', html)
+    html = re.sub(r'(<div id="endText">)(.*?)(<p>)', r'\1\3', html)
+    soup = BeautifulSoup(html, 'lxml')
     alls = soup.find_all('div', id="endText")
     for div in alls:
-        if div.find('script'):
-            div = re.sub(r'<script.*?</script>', '', div)
         p_in_div = div.find_all('p')
-        if len(p_in_div) is 0:
-            p_in_div = re.sub(r'(<div id="endText">)(.*?)(</p>)(<p>)', r'\1\2\4', p_in_div)
         for p_tag in p_in_div:
-            if p_tag.text is not None:
+            if len(p_tag.text) is not 0:
                 date += p_tag.text + u'\n'
+    del html
+    del soup
+    del alls
     return date
 
 
@@ -135,9 +135,8 @@ def childProcess(year=2014, month=1, day=1, newsType=0):
             sendToMongodb(
                 {'date': items[0], 'time': items[1], 'class': items[2], 'childclass': items[3],
                  'url': items[4], 'title': items[5], 'content': getnews(str(items[4]))})
-            gc.collect()
         del jsonlist
-        gc.collect()
+    gc.collect()
 
 
 # 网易的接口最多只能获取到2014年3月22日的新闻。再往前也有对应的接口，不过已经无法工作
@@ -160,6 +159,7 @@ def main(startyear=2014, startmonth=1, startday=1, startnewsType=0):
                 pool.close()
                 pool.join()
                 gc.collect()
+
 
 ## TODO:程序崩溃时保留状态，以便恢复
 # def restoreProcess():
